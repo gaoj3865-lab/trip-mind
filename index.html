@@ -66,6 +66,7 @@ body{
 .compare-row .c-label{width:44px;flex-shrink:0;font-weight:600;font-size:13px}
 .compare-row .c-price{flex:1;font-weight:500}
 .compare-row .c-time{color:var(--text-secondary);font-size:13px;flex:1}
+.compare-row .c-daily{color:var(--text-secondary);font-size:12px;min-width:70px;text-align:center}
 .compare-row .c-delta{font-size:13px;font-weight:600;text-align:right;min-width:80px}
 .delta-save{color:var(--green)}
 .conclusion{background:var(--green-bg);border:1px solid rgba(76,217,100,0.15);border-radius:var(--radius-sm);padding:12px 16px;font-size:14px;color:var(--green);margin-top:8px;font-weight:500}
@@ -75,7 +76,8 @@ body{
 .plan-card:hover,.plan-card.active{border-color:var(--gold);background:var(--surface-raised)}
 .plan-card .p-name{font-size:14px;font-weight:600;margin-bottom:2px}
 .plan-card .p-price{font-size:18px;font-weight:700;margin:6px 0 2px}
-.plan-card .p-time{font-size:12px;color:var(--text-tertiary);margin-bottom:8px}
+.plan-card .p-time{font-size:12px;color:var(--text-tertiary);margin-bottom:2px}
+.plan-card .p-daily{font-size:11px;color:var(--green);margin-bottom:8px;font-weight:500}
 .stars{display:flex;flex-direction:column;gap:3px;align-items:center}
 .star-row{font-size:11px;color:var(--text-tertiary);display:flex;align-items:center;gap:4px}
 .star-row .fill{color:var(--gold)}
@@ -280,10 +282,10 @@ function generatePlan(origin,dest,dateObj,days){
   var driveToll=mult.highwayFree?0:driveTollOneWay;
   var driveOneWay=mult.highwayFree?Math.round(driveDist*0.5):driveOneWayBase;
 
-  // 往返
+  // 往返基础
   var planePrice=planeOneWay*2;
   var trainPrice=trainOneWay2*2;
-  var driveCost=driveOneWay*2;
+  var driveRoundTrip=driveOneWay*2;
 
   // 时间
   var planeTime=dist<500?1.5:dist<800?2:dist<1200?2.5:dist<1500?3:dist<2000?3.5:4.5;
@@ -291,8 +293,19 @@ function generatePlan(origin,dest,dateObj,days){
   var trainTime=Math.round(dist/280);
   var trainTotal=(trainTime+1.5)*2;
   var driveTime=Math.round(driveDist/85);
-  var driveTotal=driveTime*2;
-  var driveDays=Math.ceil(driveTotal/8);
+  var driveRoundTripTime=driveTime*2;
+  var driveDaysNeeded=Math.ceil(driveRoundTripTime/8);
+
+  // 自驾成本随天数增长：多余天数产生当地用车成本
+  var extraDays=Math.max(0, days-driveDaysNeeded);
+  var localCostPerDay=mult.highwayFree?50:100;
+  var driveCost=driveRoundTrip+extraDays*localCostPerDay;
+  var driveTotal=driveRoundTripTime+extraDays*3;
+
+  // 日均交通成本
+  var planeDaily=Math.round(planePrice/days);
+  var trainDaily=Math.round(trainPrice/days);
+  var driveDaily=Math.round(driveCost/days);
 
   // 推荐方案
   var recMode,recPrice,recTime;
@@ -302,20 +315,20 @@ function generatePlan(origin,dest,dateObj,days){
   }else if(days<=5){
     if(dist<600){recMode='高铁';recPrice=trainPrice;recTime='往返 '+trainTime*2+'小时'}
     else if(dist>1500){recMode='飞机';recPrice=planePrice;recTime='往返 '+planeTime*2+'小时'}
-    else if(dist<=1200&&driveDays<=days&&mult.highwayFree){recMode='自驾';recPrice=driveCost;recTime='往返 '+driveTotal+'小时'}
-    else if(dist<=1200&&driveDays<=days&&driveCost<trainPrice+300){recMode='自驾';recPrice=driveCost;recTime='往返 '+driveTotal+'小时'}
+    else if(dist<=1200&&driveDaysNeeded<=days&&mult.highwayFree){recMode='自驾';recPrice=driveCost;recTime='往返 '+driveTotal+'小时'}
+    else if(dist<=1200&&driveDaysNeeded<=days&&driveCost<trainPrice+300){recMode='自驾';recPrice=driveCost;recTime='往返 '+driveTotal+'小时'}
     else{recMode='高铁';recPrice=trainPrice;recTime='往返 '+trainTime*2+'小时'}
   }else{
-    if(dist<=1500&&driveDays+1<=days){recMode='自驾';recPrice=driveCost;recTime='往返 '+driveTotal+'小时'}
+    if(dist<=1500&&driveDaysNeeded+1<=days){recMode='自驾';recPrice=driveCost;recTime='往返 '+driveTotal+'小时'}
     else if(dist<800){recMode='高铁';recPrice=trainPrice;recTime='往返 '+trainTime*2+'小时'}
     else{recMode='飞机';recPrice=planePrice;recTime='往返 '+planeTime*2+'小时'}
   }
 
   // 对比数据
   var comparison=[
-    {mode:'飞机',price:planePrice,time:planeTime*2+'h',totalTime:planeTotal,rawTime:planeTime*2},
-    {mode:'高铁',price:trainPrice,time:trainTime*2+'h',totalTime:trainTotal,rawTime:trainTime*2},
-    {mode:'自驾',price:driveCost,time:driveTotal+'h',totalTime:driveTotal,rawTime:driveTotal}
+    {mode:'飞机',price:planePrice,time:planeTime*2+'h',totalTime:planeTotal,rawTime:planeTime*2,daily:planeDaily},
+    {mode:'高铁',price:trainPrice,time:trainTime*2+'h',totalTime:trainTotal,rawTime:trainTime*2,daily:trainDaily},
+    {mode:'自驾',price:driveCost,time:driveTotal+'h',totalTime:driveTotal,rawTime:driveTotal,daily:driveDaily}
   ];
 
   // 为什么推荐
@@ -323,8 +336,8 @@ function generatePlan(origin,dest,dateObj,days){
   var timeDiff=Math.abs(planeTotal-trainTotal);
   var con='';
   if(recMode==='自驾'){
-    if(mult.highwayFree) con='国庆高速免费，往返自驾仅'+fmt(driveCost)+'（省了'+fmt(driveTollOneWay*2)+'高速费）。'+driveDays+'天在路上，你'+days+'天完全够用';
-    else con='往返自驾'+fmt(driveCost)+'，'+driveDays+'天行程自由度最高，沿途随时停靠探索';
+    if(mult.highwayFree) con='国庆高速免费，往返自驾仅'+fmt(driveCost)+'（省了'+fmt(driveTollOneWay*2)+'高速费）。'+driveDaysNeeded+'天在路上，你'+days+'天完全够用';
+    else con='往返自驾'+fmt(driveCost)+'，'+driveDaysNeeded+'天行程自由度最高，沿途随时停靠探索';
   }else if(recMode==='高铁'){
     if(planePrice>trainPrice+800) con='往返差价'+fmt(saving)+'，仅增加约'+Math.round(timeDiff)+'小时。当前场景下高铁性价比最高';
     else con='高铁与飞机往返价格接近，高铁班次更灵活，省去机场接驳';
@@ -340,11 +353,11 @@ function generatePlan(origin,dest,dateObj,days){
   function starRating(val,sorted){return val===sorted[0]?5:val===sorted[1]?4:3}
 
   var plans=[
-    {id:'plane',name:'飞机',price:fmt(planePrice),time:'往返 '+planeTime*2+'h',
+    {id:'plane',name:'飞机',price:fmt(planePrice),time:'往返 '+planeTime*2+'h',daily:planeDaily,
      stars:{cost:starRating(planePrice,pSorted),time:starRating(planeTotal,tSorted),exp:3}},
-    {id:'train',name:'高铁',price:fmt(trainPrice),time:'往返 '+trainTime*2+'h',
+    {id:'train',name:'高铁',price:fmt(trainPrice),time:'往返 '+trainTime*2+'h',daily:trainDaily,
      stars:{cost:starRating(trainPrice,pSorted),time:starRating(trainTotal,tSorted),exp:4}},
-    {id:'drive',name:'自驾',price:fmt(driveCost),time:'往返 '+driveTotal+'h',
+    {id:'drive',name:'自驾',price:fmt(driveCost),time:'往返 '+driveTotal+'h',daily:driveDaily,
      stars:{cost:starRating(driveCost,pSorted),time:starRating(driveTotal,tSorted),exp:5}}
   ];
 
@@ -352,8 +365,8 @@ function generatePlan(origin,dest,dateObj,days){
   var discoveries=[];
   if(Math.abs(Math.round(driveCost/2)-Math.round(trainPrice/2))<300)
     discoveries.push({t:'<span class="di-highlight">2人同行</span>，自驾人均 <span class="di-value">'+fmt(Math.round(driveCost/2))+'</span>，接近高铁人均 <span class="di-value">'+fmt(Math.round(trainPrice/2))+'</span>'});
-  if(recMode!=='自驾'&&driveDays<=days)
-    discoveries.push({t:'往返自驾只需 <span class="di-value">'+driveDays+'天</span> 在路上，你'+days+'天的行程完全够用。'+(mult.highwayFree?'<span class="cs">且高速免费</span>':'')});
+  if(recMode!=='自驾'&&driveDaysNeeded<=days)
+    discoveries.push({t:'往返自驾只需 <span class="di-value">'+driveDaysNeeded+'天</span> 在路上，你'+days+'天的行程完全够用。'+(mult.highwayFree?'<span class="cs">且高速免费</span>':'')});
   if(dateObj.season==='guoqing'||dateObj.season==='chunjie')
     discoveries.push({t:dateObj.label+'机票价格是平时的 <span class="di-value">'+mult.plane+'倍</span>，如果时间灵活可以考虑错峰'});
 
@@ -483,7 +496,7 @@ function buildResults(cheaper){
   var plansHtml='';
   for(var i=0;i<d.plans.length;i++){
     var p=d.plans[i];
-    plansHtml+='<div class="plan-card'+(p.id===activeId?' active':'')+'" onclick="switchP(\''+p.id+'\')"><div class="p-name">'+p.name+'</div><div class="p-price">'+p.price+'</div><div class="p-time">'+p.time+'</div><div class="stars"><div class="star-row">成本'+stars(p.stars.cost)+'</div><div class="star-row">时间'+stars(p.stars.time)+'</div><div class="star-row">体验'+stars(p.stars.exp)+'</div></div></div>';
+    plansHtml+='<div class="plan-card'+(p.id===activeId?' active':'')+'" onclick="switchP(\''+p.id+'\')"><div class="p-name">'+p.name+'</div><div class="p-price">'+p.price+'</div><div class="p-time">'+p.time+'</div><div class="p-daily">日均 '+p.daily+'</div><div class="stars"><div class="star-row">成本'+stars(p.stars.cost)+'</div><div class="star-row">时间'+stars(p.stars.time)+'</div><div class="star-row">体验'+stars(p.stars.exp)+'</div></div></div>';
   }
 
   var compareHtml='';
@@ -497,7 +510,7 @@ function buildResults(cheaper){
     }else{
       delta='<span style="color:var(--green);font-size:12px">推荐</span>';
     }
-    compareHtml+='<div class="compare-row"><span class="c-label">'+c.mode+'</span><span class="c-price">往返 '+fmt(c.price)+'</span><span class="c-time">往返约 '+c.totalTime+'h</span><span class="c-delta">'+delta+'</span></div>';
+    compareHtml+='<div class="compare-row"><span class="c-label">'+c.mode+'</span><span class="c-price">往返 '+fmt(c.price)+'</span><span class="c-time">往返约 '+c.totalTime+'h</span><span class="c-daily">日均 '+fmt(c.daily)+'</span><span class="c-delta">'+delta+'</span></div>';
   }
 
   var discoverHtml='';
@@ -522,7 +535,7 @@ function buildResults(cheaper){
 
   r.innerHTML='<div class="results-header"><div class="route">'+d.origin+' <em>→</em> '+d.dest+'</div><button class="back-btn" onclick="goBack()">← 重新规划</button></div>'+
 
-    '<div class="rec-card"><div class="label">★ '+d.dateObj.label+'推荐</div><div class="mode">'+d.rec.mode+seasonTag+'</div><div class="main-data"><div class="data-item"><span class="d-label">往返交通总成本</span><div class="d-value">'+fmt(d.rec.price)+'</div></div><div class="data-item"><span class="d-label">往返总耗时</span><div class="d-value">'+d.rec.time+'</div><span class="d-sub">'+d.days+'天行程</span></div></div></div>'+
+    '<div class="rec-card"><div class="label">★ '+d.dateObj.label+'推荐</div><div class="mode">'+d.rec.mode+seasonTag+'</div><div class="main-data"><div class="data-item"><span class="d-label">往返交通总成本</span><div class="d-value">'+fmt(d.rec.price)+'</div></div><div class="data-item"><span class="d-label">日均交通成本</span><div class="d-value">'+fmt(Math.round(d.rec.price/d.days))+'</div></div><div class="data-item"><span class="d-label">往返总耗时</span><div class="d-value">'+d.rec.time+'</div><span class="d-sub">'+d.days+'天行程</span></div></div></div>'+
 
     '<div class="why-section"><h3>为什么当前推荐'+d.rec.mode+'</h3><div class="compare-table">'+compareHtml+'</div><div class="conclusion">'+d.conclusion+'</div></div>'+
 
